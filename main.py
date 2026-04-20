@@ -106,3 +106,25 @@ class RamalUpdate(BaseModel):
     nome: str
     departamento: str
     ramal: str
+
+# ---------------- APP ----------------
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 🔥 liberado para evitar problema local
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+Base.metadata.create_all(bind=engine)
+
+
+# ---------------- DB DEP ----------------
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
