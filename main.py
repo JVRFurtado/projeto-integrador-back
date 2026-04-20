@@ -112,7 +112,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # liberado para evitar problema local
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -195,3 +195,75 @@ def get_user(
 def me(user: Pessoa = Depends(get_user)):
     return {"nome": user.nome, "role": user.aotipousuario}
 
+# ---------------- RAMAIS ----------------
+@app.post("/pessoas/")
+def criar_ramal(
+    nome: str = Form(...),
+    departamento: str = Form(...),
+    ramal: str = Form(...),
+    db: Session = Depends(get_db),
+    user: Pessoa = Depends(get_user)
+):
+    if user.aotipousuario != "admin":
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    if not nome or not ramal:
+        raise HTTPException(status_code=400, detail="Campos obrigatórios")
+
+    novo = Ramal(nome=nome, departamento=departamento, ramal=ramal)
+
+    db.add(novo)
+    db.commit()
+    db.refresh(novo)
+
+    return novo
+
+@app.get("/pessoas/")
+def listar_ramal(
+    db: Session = Depends(get_db),
+    user: Pessoa = Depends(get_user)
+):
+    return db.query(Ramal).all()
+
+@app.put("/pessoas/{id}")
+def atualizar_ramal(
+    id: int,
+    dados: RamalUpdate,
+    db: Session = Depends(get_db),
+    user: Pessoa = Depends(get_user)
+):
+    if user.aotipousuario != "admin":
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    obj = db.query(Ramal).filter(Ramal.id == id).first()
+
+    if not obj:
+        raise HTTPException(status_code=404, detail="Ramal não encontrado")
+
+    obj.nome = dados.nome
+    obj.departamento = dados.departamento
+    obj.ramal = dados.ramal
+
+    db.commit()
+    db.refresh(obj)
+
+    return obj
+
+@app.delete("/pessoas/{id}")
+def deletar_ramal(
+    id: int,
+    db: Session = Depends(get_db),
+    user: Pessoa = Depends(get_user)
+):
+    if user.aotipousuario != "admin":
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    obj = db.query(Ramal).filter(Ramal.id == id).first()
+
+    if not obj:
+        raise HTTPException(status_code=404, detail="Ramal não encontrado")
+
+    db.delete(obj)
+    db.commit()
+
+    return {"msg": "Removido"}
