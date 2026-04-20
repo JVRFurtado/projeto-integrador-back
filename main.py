@@ -41,7 +41,6 @@ class Pessoa(Base):
     senha_hash = Column(String)
     aotipousuario = Column(String, default="padrao")
 
-
 class Ramal(Base):
     __tablename__ = "ramais"
 
@@ -54,14 +53,11 @@ class Ramal(Base):
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-
 def hash_senha(senha: str):
     return pwd_context.hash(senha)
 
-
 def verificar_senha(senha: str, senha_hash: str):
     return pwd_context.verify(senha, senha_hash)
-
 
 def normalizar_username(nome: str):
     return nome.strip().lower()
@@ -73,9 +69,40 @@ def criar_access_token(data: dict):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-
 def criar_refresh_token(data: dict):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+# ---------------- SCHEMAS ----------------
+class UsuarioCreate(BaseModel):
+    nome: str
+    senha: str
+    tipo: str = "padrao"
+
+    @validator("senha")
+    def validar_senha(cls, v):
+        if len(v) < 6:
+            raise ValueError("Senha deve ter no mínimo 6 caracteres")
+        return v
+
+    @validator("nome")
+    def normalizar_nome(cls, v):
+        return v.strip().lower()
+
+class UsuarioUpdate(BaseModel):
+    nome: str | None = None
+    senha: str | None = None
+    tipo: str | None = None
+
+    @validator("senha")
+    def validar_senha(cls, v):
+        if v and len(v) < 6:
+            raise ValueError("Senha deve ter no mínimo 6 caracteres")
+        return v
+
+class RamalUpdate(BaseModel):
+    nome: str
+    departamento: str
+    ramal: str
