@@ -112,14 +112,13 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 🔥 liberado para evitar problema local
+    allow_origins=["*"],  # liberado para evitar problema local
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 Base.metadata.create_all(bind=engine)
-
 
 # ---------------- DB DEP ----------------
 def get_db():
@@ -128,3 +127,71 @@ def get_db():
         yield db
     finally:
         db.close()
+
+# ---------------- AUTH ----------------
+def autenticar(db: Session, nome: str, senha: str):
+    nome = normalizar_username(nome)
+    user = db.query(Pessoa).filter(Pessoa.nome == nome).first()
+
+    if not user or not verificar_senha(senha, user.senha_hash):
+        return None
+
+    return user
+
+@app.post("/token")
+def login(
+    form: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    user = autenticar(db, form.username, form.password)
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Login inválido")
+
+    return {
+        "access_token": criar_access_token({"sub": user.nome}),
+        "refresh_token": criar_refresh_token({"sub": user.nome}),
+        "token_type": "bearer"
+    }
+
+@app.post("/refresh")
+def refresh(token: str = Form(...)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+
+        if not username:
+            raise HTTPException(status_code=401, detail="Token inválido")
+
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Refresh inválido")
+
+    return {
+        "access_token": criar_access_token({"sub": username})
+    }
+
+def get_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+
+        if not username:
+            raise HTTPException(status_code=401, detail="Token inválido")
+
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Token inválido")
+
+    user = db.query(Pessoa).filter(Pessoa.nome == username).first()
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Usuário não encontrado")
+
+    return user
+
+@app.get("/users/me")
+def me(user: Pessoa = Depends(get_user)):
+    return {"nome": user.nome, "role": user.aotipousuario}
+
