@@ -24,3 +24,45 @@ ALGORITHM = "HS256"
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
+
+# ---------------- DB ----------------
+engine = create_engine(
+    DATABASE_URL, connect_args={"check_same_thread": False}
+)
+SessionLocal = sessionmaker(bind=engine)
+Base = declarative_base()
+
+# ---------------- MODELOS ----------------
+class Pessoa(Base):
+    __tablename__ = "pessoas"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String, unique=True, index=True)
+    senha_hash = Column(String)
+    aotipousuario = Column(String, default="padrao")
+
+
+class Ramal(Base):
+    __tablename__ = "ramais"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String)
+    departamento = Column(String)
+    ramal = Column(String)
+
+# ---------------- SEGURANÇA ----------------
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+
+def hash_senha(senha: str):
+    return pwd_context.hash(senha)
+
+
+def verificar_senha(senha: str, senha_hash: str):
+    return pwd_context.verify(senha, senha_hash)
+
+
+def normalizar_username(nome: str):
+    return nome.strip().lower()
+
