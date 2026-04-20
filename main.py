@@ -267,3 +267,104 @@ def deletar_ramal(
     db.commit()
 
     return {"msg": "Removido"}
+
+# ---------------- USUÁRIOS ----------------
+@app.post("/usuarios/")
+def criar_usuario(
+    dados: UsuarioCreate,
+    db: Session = Depends(get_db),
+    user: Pessoa = Depends(get_user)
+):
+    if user.aotipousuario != "admin":
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    nome = normalizar_username(dados.nome)
+
+    if db.query(Pessoa).filter(Pessoa.nome == nome).first():
+        raise HTTPException(status_code=400, detail="Usuário já existe")
+
+    novo = Pessoa(
+        nome=nome,
+        senha_hash=hash_senha(dados.senha),
+        aotipousuario=dados.tipo
+    )
+
+    db.add(novo)
+    db.commit()
+    db.refresh(novo)
+
+    return novo
+
+@app.get("/usuarios/")
+def listar_usuarios(
+    db: Session = Depends(get_db),
+    user: Pessoa = Depends(get_user)
+):
+    if user.aotipousuario != "admin":
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    return db.query(Pessoa).all()
+
+@app.put("/usuarios/{id}")
+def atualizar_usuario(
+    id: int,
+    dados: UsuarioUpdate,
+    db: Session = Depends(get_db),
+    user: Pessoa = Depends(get_user)
+):
+    if user.aotipousuario != "admin":
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    obj = db.query(Pessoa).filter(Pessoa.id == id).first()
+
+    if not obj:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    if obj.id == user.id and dados.tipo and dados.tipo != "admin":
+        raise HTTPException(status_code=400, detail="Você não pode remover seu próprio admin")
+
+    if dados.nome:
+        obj.nome = normalizar_username(dados.nome)
+
+    if dados.senha:
+        obj.senha_hash = hash_senha(dados.senha)
+
+    if dados.tipo:
+        if obj.aotipousuario == "admin" and dados.tipo != "admin":
+            total_admins = db.query(Pessoa).filter(Pessoa.aotipousuario == "admin").count()
+            if total_admins <= 1:
+                raise HTTPException(status_code=400, detail="Último admin não pode ser removido")
+
+        obj.aotipousuario = dados.tipo
+
+    db.commit()
+    db.refresh(obj)
+
+    return obj
+
+@app.delete("/usuarios/{id}")
+def deletar_usuario(
+    id: int,
+    db: Session = Depends(get_db),
+    user: Pessoa = Depends(get_user)
+):
+    if user.aotipousuario != "admin":
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    obj = db.query(Pessoa).filter(Pessoa.id == id).first()
+
+    if not obj:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    if obj.id == user.id:
+        raise HTTPException(status_code=400, detail="Você não pode excluir a si mesmo")
+
+    if obj.aotipousuario == "admin":
+        total_admins = db.query(Pessoa).filter(Pessoa.aotipousuario == "admin").count()
+        if total_admins <= 1:
+            raise HTTPException(status_code=400, detail="Último admin não pode ser removido")
+
+    db.delete(obj)
+    db.commit()
+
+    return {"msg": "Removido"}
