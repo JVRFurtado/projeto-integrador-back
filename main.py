@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from sqlalchemy import Column, Integer, String, create_engine
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
+from sqlalchemy.engine.url import make_url
 
 from passlib.context import CryptContext
 from pydantic import BaseModel, validator
@@ -26,9 +27,12 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 # ---------------- DB ----------------
-engine = create_engine(
-    DATABASE_URL, connect_args={"check_same_thread": False}
-)
+engine = make_url(DATABASE_URL)
+if url.drivername.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(DATABASE_URL)
+
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
