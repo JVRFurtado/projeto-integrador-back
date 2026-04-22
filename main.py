@@ -29,7 +29,12 @@ REFRESH_TOKEN_EXPIRE_DAYS = 7
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-SessionLocal = sessionmaker(bind=engine)
+print(f"Connecting to database at {DATABASE_URL}")
+
+engine = create_engine(DATABASE_URL)
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 Base = declarative_base()
 
 # ---------------- MODELOS ----------------
