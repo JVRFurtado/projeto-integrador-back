@@ -20,4 +20,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Rodar criar_admin e iniciar o servidor
-CMD ["sh", "-c", "python criar_admin.py && uvicorn main:app --host 0.0.0.0 --port $PORT"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "$PORT"]
