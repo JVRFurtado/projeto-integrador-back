@@ -1,18 +1,23 @@
-# Usar Python 3.12 (ou outra versão estável)
+# Usar Python 3.12 slim
 FROM python:3.12-slim
 
 # Diretório do app
 WORKDIR /app
 
+# Instalar dependências do sistema necessárias para psycopg2-binary
+RUN apt-get update && \
+    apt-get install -y gcc libpq-dev build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
 # Copiar requirements
 COPY requirements.txt .
 
-# Instalar dependências
+# Instalar dependências Python
+RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar todo o projeto
 COPY . .
 
-# Rodar migrations ou criar admin automaticamente
-# Aqui chamamos o script criar_admin.py antes do uvicorn
-CMD python criar_admin.py && uvicorn main:app --host 0.0.0.0 --port $PORT
+# Rodar criar_admin e uvicorn
+CMD ["sh", "-c", "python criar_admin.py && uvicorn main:app --host 0.0.0.0 --port $PORT"]
