@@ -117,7 +117,6 @@ app = FastAPI()
 
 origins = [
     "https://jvrfurtado.github.io",
-    "*",
 ]
 
 app.add_middleware(
