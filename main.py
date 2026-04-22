@@ -26,9 +26,11 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 # ---------------- DB ----------------
-engine = create_engine(
-    DATABASE_URL, connect_args={"check_same_thread": False}
-)
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(DATABASE_URL)
+    
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
@@ -112,7 +114,10 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://jvrfurtado.github.io",
+        "https://jvrfurtado.github.io/projeto-integrador"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
