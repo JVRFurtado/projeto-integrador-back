@@ -375,3 +375,22 @@ def deletar_usuario(
     db.commit()
 
     return {"msg": "Removido"}
+
+@app.on_event("startup")
+def startup():
+    Base.metadata.create_all(bind=engine)
+
+    db = SessionLocal()
+    try:
+        existe = db.query(Pessoa).filter(Pessoa.nome == "admin").first()
+        if not existe:
+            admin = Pessoa(
+                nome="admin",
+                senha_hash=hash_senha("123456"),
+                aotipousuario="admin"
+            )
+            db.add(admin)
+            db.commit()
+            print("Admin criado")
+    finally:
+        db.close()
