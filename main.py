@@ -30,7 +30,7 @@ if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 else:
     engine = create_engine(DATABASE_URL)
-    
+
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
@@ -112,12 +112,14 @@ class RamalUpdate(BaseModel):
 # ---------------- APP ----------------
 app = FastAPI()
 
+origins = [
+    "https://jvrfurtado.github.io",
+    "*",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://jvrfurtado.github.io",
-        "https://jvrfurtado.github.io/projeto-integrador"
-    ],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
