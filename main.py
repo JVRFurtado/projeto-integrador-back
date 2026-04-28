@@ -2,57 +2,68 @@ from fastapi import FastAPI, HTTPException, Depends, Form
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 
-from sqlalchemy import Column, Integer, String, create_engine
+from sqlalchemy import Column, Integer, String, ForeignKey, create_engine
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 
 from passlib.context import CryptContext
-from pydantic import BaseModel, validator
+from pydantic import BaseModel
 
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 
-from dotenv import load_dotenv
 import os
-
-load_dotenv()
 
 # ---------------- CONFIG ----------------
 DATABASE_URL = os.getenv("DATABASE_URL")
-
-SECRET_KEY = os.getenv("SECRET_KEY")
+SECRET_KEY = os.getenv("SECRET_KEY", "secret")
 ALGORITHM = "HS256"
 
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-REFRESH_TOKEN_EXPIRE_DAYS = 7
-
 # ---------------- DB ----------------
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
-print(f"Connecting to database at {DATABASE_URL}")
-
 engine = create_engine(DATABASE_URL)
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
+SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
 # ---------------- MODELOS ----------------
+class Cargo(Base):
+    __tablename__ = "cargos"
+    idcargo = Column(Integer, primary_key=True)
+    txnome = Column(String)
+
+class Departamento(Base):
+    __tablename__ = "departamentos"
+    iddepto = Column(Integer, primary_key=True)
+    txnomedepto = Column(String)
+
 class Pessoa(Base):
     __tablename__ = "pessoas"
 
-    id = Column(Integer, primary_key=True, index=True)
-    nome = Column(String, unique=True, index=True)
-    senha_hash = Column(String)
+    idpessoa = Column(Integer, primary_key=True)
+    txnome = Column(String)
+    txemail = Column(String)
+    txsenha = Column(String)
+
+    cargoid = Column(Integer, ForeignKey("cargos.idcargo"))
+    deptoid = Column(Integer, ForeignKey("departamentos.iddepto"))
+
     aotipousuario = Column(String, default="padrao")
 
-class Ramal(Base):
-    __tablename__ = "ramais"
+class RamalTelefonico(Base):
+    __tablename__ = "ramais_telefonicos"
 
-    id = Column(Integer, primary_key=True, index=True)
-    nome = Column(String)
-    departamento = Column(String)
-    ramal = Column(String)
+    idramal = Column(Integer, primary_key=True)
+    nuramal = Column(String)
+
+class RamalPessoa(Base):
+    __tablename__ = "ramal_pessoas"
+
+    pessoaid = Column(Integer, ForeignKey("pessoas.idpessoa"), primary_key=True)
+    ramalid = Column(Integer, ForeignKey("ramais_telefonicos.idramal"), primary_key=True)
+
+class RamalDepto(Base):
+    __tablename__ = "ramal_depto"
+
+    deptoid = Column(Integer, ForeignKey("departamentos.iddepto"), primary_key=True)
+    ramalid = Column(Integer, ForeignKey("ramais_telefonicos.idramal"), primary_key=True)
 
 # ---------------- SEGURANÇA ----------------
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -64,64 +75,18 @@ def hash_senha(senha: str):
 def verificar_senha(senha: str, senha_hash: str):
     return pwd_context.verify(senha, senha_hash)
 
-def normalizar_username(nome: str):
-    return nome.strip().lower()
-
 # ---------------- JWT ----------------
 def criar_access_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-def criar_refresh_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-# ---------------- SCHEMAS ----------------
-class UsuarioCreate(BaseModel):
-    nome: str
-    senha: str
-    tipo: str = "padrao"
-
-    @validator("senha")
-    def validar_senha(cls, v):
-        if len(v) < 6:
-            raise ValueError("Senha deve ter no mínimo 6 caracteres")
-        return v
-
-    @validator("nome")
-    def normalizar_nome(cls, v):
-        return v.strip().lower()
-
-class UsuarioUpdate(BaseModel):
-    nome: str | None = None
-    senha: str | None = None
-    tipo: str | None = None
-
-    @validator("senha")
-    def validar_senha(cls, v):
-        if v and len(v) < 6:
-            raise ValueError("Senha deve ter no mínimo 6 caracteres")
-        return v
-
-class RamalUpdate(BaseModel):
-    nome: str
-    departamento: str
-    ramal: str
+    expire = datetime.utcnow() + timedelta(minutes=30)
+    data.update({"exp": expire})
+    return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
 
 # ---------------- APP ----------------
 app = FastAPI()
 
-origins = [
-    "https://jvrfurtado.github.io",
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -139,74 +104,67 @@ def get_db():
 
 # ---------------- AUTH ----------------
 def autenticar(db: Session, nome: str, senha: str):
-    nome = normalizar_username(nome)
-    user = db.query(Pessoa).filter(Pessoa.nome == nome).first()
-
-    if not user or not verificar_senha(senha, user.senha_hash):
+    user = db.query(Pessoa).filter(Pessoa.txnome == nome).first()
+    if not user or not verificar_senha(senha, user.txsenha):
         return None
-
     return user
 
 @app.post("/token")
-def login(
-    form: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
-):
+def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = autenticar(db, form.username, form.password)
 
     if not user:
         raise HTTPException(status_code=401, detail="Login inválido")
 
     return {
-        "access_token": criar_access_token({"sub": user.nome}),
-        "refresh_token": criar_refresh_token({"sub": user.nome}),
+        "access_token": criar_access_token({"sub": user.txnome}),
+        "refresh_token": criar_access_token({"sub": user.txnome}),
         "token_type": "bearer"
     }
 
-@app.post("/refresh")
-def refresh(token: str = Form(...)):
+def get_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username = payload.get("sub")
-
-        if not username:
-            raise HTTPException(status_code=401, detail="Token inválido")
-
+        nome = payload.get("sub")
     except JWTError:
-        raise HTTPException(status_code=401, detail="Refresh inválido")
+        raise HTTPException(status_code=401)
 
-    return {
-        "access_token": criar_access_token({"sub": username})
-    }
-
-def get_user(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
-):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username = payload.get("sub")
-
-        if not username:
-            raise HTTPException(status_code=401, detail="Token inválido")
-
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Token inválido")
-
-    user = db.query(Pessoa).filter(Pessoa.nome == username).first()
-
+    user = db.query(Pessoa).filter(Pessoa.txnome == nome).first()
     if not user:
-        raise HTTPException(status_code=401, detail="Usuário não encontrado")
+        raise HTTPException(status_code=401)
 
     return user
 
 @app.get("/users/me")
 def me(user: Pessoa = Depends(get_user)):
-    return {"nome": user.nome, "role": user.aotipousuario}
+    return {"nome": user.txnome, "role": user.aotipousuario}
 
-# ---------------- RAMAIS ----------------
+# ---------------- CONTATOS  ----------------
+
+@app.get("/pessoas/")
+def listar_contatos(db: Session = Depends(get_db), user: Pessoa = Depends(get_user)):
+    resultado = []
+
+    ramais = db.query(RamalTelefonico).all()
+
+    for r in ramais:
+        pessoa_link = db.query(RamalPessoa).filter_by(ramalid=r.idramal).first()
+        depto_link = db.query(RamalDepto).filter_by(ramalid=r.idramal).first()
+
+        pessoa = db.query(Pessoa).filter_by(idpessoa=pessoa_link.pessoaid).first() if pessoa_link else None
+        depto = db.query(Departamento).filter_by(iddepto=depto_link.deptoid).first() if depto_link else None
+
+        resultado.append({
+            "id": r.idramal,
+            "nome": pessoa.txnome if pessoa else "",
+            "departamento": depto.txnomedepto if depto else "",
+            "ramal": r.nuramal
+        })
+
+    return resultado
+
 @app.post("/pessoas/")
-def criar_ramal(
+def criar_contato(
     nome: str = Form(...),
     departamento: str = Form(...),
     ramal: str = Form(...),
@@ -214,70 +172,75 @@ def criar_ramal(
     user: Pessoa = Depends(get_user)
 ):
     if user.aotipousuario != "admin":
-        raise HTTPException(status_code=403, detail="Acesso negado")
+        raise HTTPException(status_code=403)
 
-    if not nome or not ramal:
-        raise HTTPException(status_code=400, detail="Campos obrigatórios")
+    depto = db.query(Departamento).filter_by(txnomedepto=departamento).first()
+    if not depto:
+        depto = Departamento(txnomedepto=departamento)
+        db.add(depto)
+        db.commit()
+        db.refresh(depto)
 
-    novo = Ramal(nome=nome, departamento=departamento, ramal=ramal)
+    pessoa = db.query(Pessoa).filter_by(txnome=nome).first()
+    if not pessoa:
+        raise HTTPException(status_code=404, detail="Pessoa não encontrada")
 
-    db.add(novo)
+    novo_ramal = RamalTelefonico(nuramal=ramal)
+    db.add(novo_ramal)
     db.commit()
-    db.refresh(novo)
+    db.refresh(novo_ramal)
 
-    return novo
+    db.add(RamalPessoa(pessoaid=pessoa.idpessoa, ramalid=novo_ramal.idramal))
+    db.add(RamalDepto(deptoid=depto.iddepto, ramalid=novo_ramal.idramal))
 
-@app.get("/pessoas/")
-def listar_ramal(
-    db: Session = Depends(get_db),
-    user: Pessoa = Depends(get_user)
-):
-    return db.query(Ramal).all()
+    db.commit()
+
+    return {"msg": "Criado"}
 
 @app.put("/pessoas/{id}")
-def atualizar_ramal(
+def atualizar_contato(
     id: int,
-    dados: RamalUpdate,
+    dados: dict,
     db: Session = Depends(get_db),
     user: Pessoa = Depends(get_user)
 ):
     if user.aotipousuario != "admin":
-        raise HTTPException(status_code=403, detail="Acesso negado")
+        raise HTTPException(status_code=403)
 
-    obj = db.query(Ramal).filter(Ramal.id == id).first()
+    ramal = db.query(RamalTelefonico).filter_by(idramal=id).first()
+    if not ramal:
+        raise HTTPException(status_code=404)
 
-    if not obj:
-        raise HTTPException(status_code=404, detail="Ramal não encontrado")
-
-    obj.nome = dados.nome
-    obj.departamento = dados.departamento
-    obj.ramal = dados.ramal
-
+    ramal.nuramal = dados.get("ramal", ramal.nuramal)
     db.commit()
-    db.refresh(obj)
 
-    return obj
+    return {"msg": "Atualizado"}
 
 @app.delete("/pessoas/{id}")
-def deletar_ramal(
+def deletar_contato(
     id: int,
     db: Session = Depends(get_db),
     user: Pessoa = Depends(get_user)
 ):
     if user.aotipousuario != "admin":
-        raise HTTPException(status_code=403, detail="Acesso negado")
+        raise HTTPException(status_code=403)
 
-    obj = db.query(Ramal).filter(Ramal.id == id).first()
+    ramal = db.query(RamalTelefonico).filter_by(idramal=id).first()
+    if not ramal:
+        raise HTTPException(status_code=404)
 
-    if not obj:
-        raise HTTPException(status_code=404, detail="Ramal não encontrado")
-
-    db.delete(obj)
+    db.delete(ramal)
     db.commit()
 
     return {"msg": "Removido"}
 
 # ---------------- USUÁRIOS ----------------
+
+class UsuarioCreate(BaseModel):
+    nome: str
+    senha: str
+    tipo: str = "padrao"
+
 @app.post("/usuarios/")
 def criar_usuario(
     dados: UsuarioCreate,
@@ -285,70 +248,47 @@ def criar_usuario(
     user: Pessoa = Depends(get_user)
 ):
     if user.aotipousuario != "admin":
-        raise HTTPException(status_code=403, detail="Acesso negado")
-
-    nome = normalizar_username(dados.nome)
-
-    if db.query(Pessoa).filter(Pessoa.nome == nome).first():
-        raise HTTPException(status_code=400, detail="Usuário já existe")
+        raise HTTPException(status_code=403)
 
     novo = Pessoa(
-        nome=nome,
-        senha_hash=hash_senha(dados.senha),
+        txnome=dados.nome,
+        txemail=f"{dados.nome}@fake.com",
+        txsenha=hash_senha(dados.senha),
+        cargoid=1,
+        deptoid=1,
         aotipousuario=dados.tipo
     )
 
     db.add(novo)
     db.commit()
-    db.refresh(novo)
 
     return novo
 
 @app.get("/usuarios/")
-def listar_usuarios(
-    db: Session = Depends(get_db),
-    user: Pessoa = Depends(get_user)
-):
+def listar_usuarios(db: Session = Depends(get_db), user: Pessoa = Depends(get_user)):
     if user.aotipousuario != "admin":
-        raise HTTPException(status_code=403, detail="Acesso negado")
+        raise HTTPException(status_code=403)
 
     return db.query(Pessoa).all()
 
 @app.put("/usuarios/{id}")
 def atualizar_usuario(
     id: int,
-    dados: UsuarioUpdate,
+    dados: dict,
     db: Session = Depends(get_db),
     user: Pessoa = Depends(get_user)
 ):
     if user.aotipousuario != "admin":
-        raise HTTPException(status_code=403, detail="Acesso negado")
+        raise HTTPException(status_code=403)
 
-    obj = db.query(Pessoa).filter(Pessoa.id == id).first()
-
+    obj = db.query(Pessoa).filter_by(idpessoa=id).first()
     if not obj:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+        raise HTTPException(status_code=404)
 
-    if obj.id == user.id and dados.tipo and dados.tipo != "admin":
-        raise HTTPException(status_code=400, detail="Você não pode remover seu próprio admin")
-
-    if dados.nome:
-        obj.nome = normalizar_username(dados.nome)
-
-    if dados.senha:
-        obj.senha_hash = hash_senha(dados.senha)
-
-    if dados.tipo:
-        if obj.aotipousuario == "admin" and dados.tipo != "admin":
-            total_admins = db.query(Pessoa).filter(Pessoa.aotipousuario == "admin").count()
-            if total_admins <= 1:
-                raise HTTPException(status_code=400, detail="Último admin não pode ser removido")
-
-        obj.aotipousuario = dados.tipo
+    if dados.get("senha"):
+        obj.txsenha = hash_senha(dados["senha"])
 
     db.commit()
-    db.refresh(obj)
-
     return obj
 
 @app.delete("/usuarios/{id}")
@@ -358,41 +298,44 @@ def deletar_usuario(
     user: Pessoa = Depends(get_user)
 ):
     if user.aotipousuario != "admin":
-        raise HTTPException(status_code=403, detail="Acesso negado")
+        raise HTTPException(status_code=403)
 
-    obj = db.query(Pessoa).filter(Pessoa.id == id).first()
-
+    obj = db.query(Pessoa).filter_by(idpessoa=id).first()
     if not obj:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
-
-    if obj.id == user.id:
-        raise HTTPException(status_code=400, detail="Você não pode excluir a si mesmo")
-
-    if obj.aotipousuario == "admin":
-        total_admins = db.query(Pessoa).filter(Pessoa.aotipousuario == "admin").count()
-        if total_admins <= 1:
-            raise HTTPException(status_code=400, detail="Último admin não pode ser removido")
+        raise HTTPException(status_code=404)
 
     db.delete(obj)
     db.commit()
 
     return {"msg": "Removido"}
 
+# ---------------- STARTUP ----------------
 @app.on_event("startup")
 def startup():
-    Base.metadata.create_all(bind=engine)
-
     db = SessionLocal()
+
     try:
-        existe = db.query(Pessoa).filter(Pessoa.nome == "admin").first()
-        if not existe:
+        if not db.query(Cargo).first():
+            db.add(Cargo(txnome="Admin"))
+
+        if not db.query(Departamento).first():
+            db.add(Departamento(txnomedepto="TI"))
+
+        db.commit()
+
+        if not db.query(Pessoa).filter(Pessoa.txnome == "admin").first():
             admin = Pessoa(
-                nome="admin",
-                senha_hash=hash_senha("123456"),
+                txnome="admin",
+                txemail="admin@admin.com",
+                txsenha=hash_senha("123456"),
+                cargoid=1,
+                deptoid=1,
                 aotipousuario="admin"
             )
             db.add(admin)
             db.commit()
-            print("Admin criado")
+
+            print("Admin criado!")
+
     finally:
         db.close()
