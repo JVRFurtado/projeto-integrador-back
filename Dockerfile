@@ -1,25 +1,23 @@
-# ---------------- BASE ----------------
+# Usar Python 3.12 slim
 FROM python:3.12-slim
 
-# Evita problemas de log buffering
-ENV PYTHONUNBUFFERED=1
-
-# Diretório da aplicação
+# Diretório do app
 WORKDIR /app
 
-# ---------------- DEPENDÊNCIAS SISTEMA ----------------
+# Instalar dependências do sistema para psycopg2 e build de pacotes
 RUN apt-get update && \
     apt-get install -y gcc libpq-dev build-essential && \
     rm -rf /var/lib/apt/lists/*
 
-# ---------------- PYTHON DEPENDENCIES ----------------
+# Copiar requirements
 COPY requirements.txt .
 
+# Atualizar pip e instalar dependências Python
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ---------------- APP ----------------
+# Copiar todo o projeto
 COPY . .
 
-# ---------------- START ----------------
-CMD ["sh", "-c", "python criar_admin.py && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Rodar criar_admin e iniciar o servidor
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port $PORT"]
