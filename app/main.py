@@ -15,7 +15,11 @@ from app.routers import (
     ramais
 )
 
+from criar_admin import criar_admin
+
 Base.metadata.create_all(bind=engine)
+
+criar_admin()
 
 app = FastAPI(
     title="API Agenda Corporativa"
