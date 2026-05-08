@@ -36,12 +36,29 @@ class Pessoa(Base):
 
     txnome = Column(String(100), nullable=False)
 
-    txemail = Column(String(150), unique=True, nullable=False)
+    txusername = Column(
+        String(50),
+        unique=True,
+        nullable=False
+    )
+
+    txemail = Column(
+        String(150),
+        unique=True,
+        nullable=False
+    )
 
     txsenha = Column(String(255), nullable=False)
 
-    cargoid = Column(Integer, ForeignKey("cargos.idcargo"))
-    deptoid = Column(Integer, ForeignKey("departamentos.iddepto"))
+    cargoid = Column(
+        Integer,
+        ForeignKey("cargos.idcargo")
+    )
+
+    deptoid = Column(
+        Integer,
+        ForeignKey("departamentos.iddepto")
+    )
 
     aotipousuario = Column(
         Enum("admin", "gestor", "padrao"),
@@ -49,14 +66,16 @@ class Pessoa(Base):
         nullable=False
     )
 
-    dtcadpessoa = Column(DateTime, server_default=func.now())
+    dtcadpessoa = Column(
+        DateTime,
+        server_default=func.now()
+    )
 
     dtedicaopessoa = Column(DateTime)
 
     cargo = relationship("Cargo")
 
     departamento = relationship("Departamento")
-
 
 class RamalTelefonico(Base):
     __tablename__ = "ramais_telefonicos"
