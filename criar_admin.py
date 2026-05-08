@@ -51,6 +51,7 @@ def criar_admin():
 
     admin = Pessoa(
         txnome="Administrador",
+        txusername="admin",
         txemail="admin@admin.com",
         txsenha=hash_senha("123456"),
         cargoid=cargo.idcargo,
