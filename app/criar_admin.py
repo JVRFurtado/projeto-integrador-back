@@ -1,40 +1,54 @@
-from sqlalchemy.orm import Session
-
 from database import SessionLocal
-from models import Pessoa
+from models import Pessoa, Cargo, Departamento
 from security import hash_senha
 
 
 def criar_admin():
-    db: Session = SessionLocal()
+    db = SessionLocal()
 
     try:
-        admin = (
+        cargo = db.query(Cargo).first()
+
+        if not cargo:
+            cargo = Cargo(txnome="Administrador")
+            db.add(cargo)
+            db.commit()
+            db.refresh(cargo)
+
+        departamento = db.query(Departamento).first()
+
+        if not departamento:
+            departamento = Departamento(
+                txnomedepto="TI"
+            )
+
+            db.add(departamento)
+            db.commit()
+            db.refresh(departamento)
+
+        existe = (
             db.query(Pessoa)
             .filter(Pessoa.idpessoa == 1)
             .first()
         )
 
-        if admin:
+        if existe:
             print("ℹ️ Admin já existe")
             return
 
-        novo_admin = Pessoa(
+        admin = Pessoa(
             txnome="Administrador",
             txemail="admin@admin.com",
             txsenha=hash_senha("123456"),
-            cargoid=1,
-            deptoid=1,
+            cargoid=cargo.idcargo,
+            deptoid=departamento.iddepto,
             aotipousuario="admin"
         )
 
-        db.add(novo_admin)
+        db.add(admin)
         db.commit()
 
-        print("✅ Admin criado com sucesso")
-
-    except Exception as e:
-        print(f"❌ Erro ao criar admin: {e}")
+        print("✅ Admin criado")
 
     finally:
         db.close()

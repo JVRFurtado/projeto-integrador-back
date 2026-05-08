@@ -1,39 +1,31 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, EmailStr
 
-# ---------------- LOGIN ----------------
-
-class UsuarioLogin(BaseModel):
-    username: str
-    password: str
-
-# ---------------- USERS ----------------
 
 class UsuarioCreate(BaseModel):
-    nome: str
-    email: str
-    senha: str
+    txnome: str
+    txemail: EmailStr
+    txsenha: str
     cargoid: int
     deptoid: int
-    tipo: str = "padrao"
+    aotipousuario: str = "padrao"
 
-    @field_validator("senha")
-    def validar_senha(cls, v):
-        if len(v) < 6:
-            raise ValueError(
-                "Senha deve ter no mínimo 6 caracteres"
-            )
-        return v
 
 class UsuarioUpdate(BaseModel):
-    senha: str | None = None
-    tipo: str | None = None
+    txnome: str | None = None
+    txemail: EmailStr | None = None
+    txsenha: str | None = None
+    cargoid: int | None = None
+    deptoid: int | None = None
+    aotipousuario: str | None = None
 
-# ---------------- RAMAIS ----------------
 
 class RamalCreate(BaseModel):
-    nome: str
-    departamento: str
-    ramal: str
+    nuramal: str
+    nuvoip: str | None = None
+    pessoaid: int
+    deptoid: int
 
-class RamalUpdate(RamalCreate):
-    pass
+
+class RamalUpdate(BaseModel):
+    nuramal: str | None = None
+    nuvoip: str | None = None
