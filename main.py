@@ -7,7 +7,7 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import hashlib
 
 from sqlalchemy import (
     create_engine,
@@ -64,11 +64,6 @@ Base = declarative_base()
 SECRET_KEY = "123456789"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
-
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto"
-)
 
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="token"
@@ -159,18 +154,15 @@ def get_db():
 # =========================================================
 
 def gerar_hash(senha):
-    return pwd_context.hash(senha)
-
+    return hashlib.sha256(
+        senha.encode()
+    ).hexdigest()
 
 def verificar_senha(
     senha,
     hash_senha
 ):
-    return pwd_context.verify(
-        senha,
-        hash_senha
-    )
-
+    return gerar_hash(senha) == hash_senha
 
 def criar_token(data: dict):
     dados = data.copy()
