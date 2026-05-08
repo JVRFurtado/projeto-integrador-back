@@ -47,12 +47,13 @@ def criar_pessoa(
         )
 
     nova = Pessoa(
-        txnome=dados["txnome"],
-        txemail=dados["txemail"],
-        txsenha=hash_senha(dados["txsenha"]),
-        cargoid=dados["cargoid"],
-        deptoid=dados["deptoid"],
-        aotipousuario=dados["aotipousuario"]
+        txnome=dados["nome"],
+        txusername=dados["username"],
+        txemail=dados["email"],
+        txsenha=hash_senha(dados["senha"]),
+        cargoid=cargo.idcargo,
+        deptoid=depto.iddepto,
+        aotipousuario=dados["tipo"]
     )
 
     db.add(nova)
