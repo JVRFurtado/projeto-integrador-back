@@ -1,13 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Pessoa
+
+from app.models import (
+    Pessoa,
+    Cargo,
+    Departamento
+)
 
 from app.dependencies import get_current_user
 
 from app.services.permissions import (
-    require_admin,
     require_gestor
 )
 
@@ -37,14 +41,9 @@ def criar_pessoa(
 
     require_gestor(user)
 
-    if (
-        user.aotipousuario == "gestor"
-        and dados["aotipousuario"] == "admin"
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="Gestor não pode criar admin"
-        )
+    cargo = db.query(Cargo).first()
+
+    depto = db.query(Departamento).first()
 
     nova = Pessoa(
         txnome=dados["nome"],
