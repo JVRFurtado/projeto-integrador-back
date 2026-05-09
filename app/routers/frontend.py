@@ -342,23 +342,24 @@ def deletar_contato(
             detail="Contato não encontrado"
         )
 
-    ramal_links = db.query(RamalPessoa).filter(
+    # pega vínculos do usuário
+    links = db.query(RamalPessoa).filter(
         RamalPessoa.pessoaid == pessoa.idpessoa
     ).all()
 
-    for link in ramal_links:
+    for link in links:
 
         ramal_id = link.ramalid
 
+        # remove vínculo pessoa x ramal
         db.delete(link)
 
-        ramal_depto = db.query(RamalDepto).filter(
+        # remove vínculo departamento x ramal
+        db.query(RamalDepto).filter(
             RamalDepto.ramalid == ramal_id
-        ).all()
+        ).delete()
 
-        for rd in ramal_depto:
-            db.delete(rd)
-
+        # remove ramal
         ramal = db.query(RamalTelefonico).filter(
             RamalTelefonico.idramal == ramal_id
         ).first()
@@ -366,6 +367,7 @@ def deletar_contato(
         if ramal:
             db.delete(ramal)
 
+    # remove pessoa
     db.delete(pessoa)
 
     db.commit()
@@ -373,7 +375,6 @@ def deletar_contato(
     return {
         "message": "Contato removido"
     }
-
 
 # =====================================================
 # LISTAR USUÁRIOS
@@ -580,12 +581,28 @@ def deletar_usuario(
             detail="Usuário não encontrado"
         )
 
-    ramal_links = db.query(RamalPessoa).filter(
+    # remove vínculos com ramais
+    links = db.query(RamalPessoa).filter(
         RamalPessoa.pessoaid == usuario.idpessoa
     ).all()
 
-    for link in ramal_links:
+    for link in links:
+
+        ramal = db.query(RamalTelefonico).filter(
+            RamalTelefonico.idramal == link.ramalid
+        ).first()
+
+        # remove vínculo departamento x ramal
+        db.query(RamalDepto).filter(
+            RamalDepto.ramalid == link.ramalid
+        ).delete()
+
+        # remove vínculo pessoa x ramal
         db.delete(link)
+
+        # remove ramal
+        if ramal:
+            db.delete(ramal)
 
     db.delete(usuario)
 
