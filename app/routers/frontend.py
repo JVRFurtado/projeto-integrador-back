@@ -36,7 +36,8 @@ def me(
 
     return {
         "nome": user.txnome,
-        "role": user.aotipousuario
+        "role": user.aotipousuario,
+        "id": user.idpessoa
     }
 
 
@@ -62,6 +63,8 @@ def listar_contatos(
             RamalPessoa.ramalid == r.idramal
         ).first()
 
+        pessoa_id = None
+
         if pessoa_link:
 
             pessoa = db.query(Pessoa).filter(
@@ -70,6 +73,7 @@ def listar_contatos(
 
             if pessoa:
                 pessoa_nome = pessoa.txnome
+                pessoa_id = pessoa.idpessoa
 
         departamento_nome = ""
 
@@ -88,6 +92,7 @@ def listar_contatos(
 
         resultado.append({
             "id": r.idramal,
+            "pessoa_id": pessoa_id,
             "nome": pessoa_nome,
             "departamento": departamento_nome,
             "ramal": r.nuramal
@@ -171,6 +176,15 @@ def criar_contato(
     username = dados["nome"].lower().replace(" ", "")
     email = f"{username}@temp.com"
 
+    existe_user = db.query(Pessoa).filter(
+        Pessoa.txusername == username
+    ).first()
+
+    if existe_user:
+
+        username = f"{username}{ramal.idramal}"
+        email = f"{username}@temp.com"
+
     pessoa = Pessoa(
         txnome=dados["nome"],
         txusername=username,
@@ -208,6 +222,137 @@ def criar_contato(
 
 
 # =====================================================
+# EDITAR CONTATO
+# =====================================================
+
+@router.put("/pessoas/{id}")
+def editar_contato(
+    id: int,
+    dados: dict,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
+
+    if user.aotipousuario not in [
+        "admin",
+        "gestor"
+    ]:
+
+        raise HTTPException(
+            status_code=403,
+            detail="Sem permissão"
+        )
+
+    ramal = db.query(RamalTelefonico).filter(
+        RamalTelefonico.idramal == id
+    ).first()
+
+    if not ramal:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Contato não encontrado"
+        )
+
+    ramal.nuramal = dados["ramal"]
+
+    pessoa_link = db.query(RamalPessoa).filter(
+        RamalPessoa.ramalid == ramal.idramal
+    ).first()
+
+    if pessoa_link:
+
+        pessoa = db.query(Pessoa).filter(
+            Pessoa.idpessoa == pessoa_link.pessoaid
+        ).first()
+
+        if pessoa:
+            pessoa.txnome = dados["nome"]
+
+    depto_link = db.query(RamalDepto).filter(
+        RamalDepto.ramalid == ramal.idramal
+    ).first()
+
+    if depto_link:
+
+        depto = db.query(Departamento).filter(
+            Departamento.iddepto == depto_link.deptoid
+        ).first()
+
+        if depto:
+            depto.txnomedepto = dados["departamento"]
+
+    db.commit()
+
+    return {
+        "message": "Contato atualizado"
+    }
+
+
+# =====================================================
+# REMOVER CONTATO
+# =====================================================
+
+@router.delete("/pessoas/{id}")
+def deletar_contato(
+    id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
+
+    if user.aotipousuario not in [
+        "admin",
+        "gestor"
+    ]:
+
+        raise HTTPException(
+            status_code=403,
+            detail="Sem permissão"
+        )
+
+    ramal = db.query(RamalTelefonico).filter(
+        RamalTelefonico.idramal == id
+    ).first()
+
+    if not ramal:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Contato não encontrado"
+        )
+
+    pessoa_link = db.query(RamalPessoa).filter(
+        RamalPessoa.ramalid == id
+    ).first()
+
+    if pessoa_link:
+
+        pessoa = db.query(Pessoa).filter(
+            Pessoa.idpessoa == pessoa_link.pessoaid
+        ).first()
+
+        db.delete(pessoa_link)
+
+        if pessoa:
+            db.delete(pessoa)
+
+    depto_link = db.query(RamalDepto).filter(
+        RamalDepto.ramalid == id
+    ).first()
+
+    if depto_link:
+        db.delete(depto_link)
+
+    db.delete(ramal)
+
+    db.commit()
+
+    return {
+        "message": "Contato removido"
+    }
+
+
+# =====================================================
 # LISTAR USUÁRIOS
 # =====================================================
 
@@ -239,91 +384,6 @@ def listar_usuarios(
 
 
 # =====================================================
-# CRIAR USUÁRIO
-# =====================================================
-
-@router.post("/usuarios/")
-def criar_usuario(
-    dados: dict,
-    db: Session = Depends(get_db),
-    user=Depends(get_current_user)
-):
-
-    if user.aotipousuario != "admin":
-
-        raise HTTPException(
-            status_code=403,
-            detail="Apenas admin"
-        )
-
-    existe_username = db.query(Pessoa).filter(
-        Pessoa.txusername == dados["username"]
-    ).first()
-
-    if existe_username:
-
-        raise HTTPException(
-            status_code=400,
-            detail="Username já existe"
-        )
-
-    existe_email = db.query(Pessoa).filter(
-        Pessoa.txemail == dados["email"]
-    ).first()
-
-    if existe_email:
-
-        raise HTTPException(
-            status_code=400,
-            detail="Email já existe"
-        )
-
-    cargo = db.query(Cargo).first()
-
-    depto = db.query(Departamento).first()
-
-    if not cargo:
-
-        cargo = Cargo(txnome="Funcionário")
-
-        db.add(cargo)
-
-        db.commit()
-
-        db.refresh(cargo)
-
-    if not depto:
-
-        depto = Departamento(txnomedepto="TI")
-
-        db.add(depto)
-
-        db.commit()
-
-        db.refresh(depto)
-
-    novo = Pessoa(
-        txnome=dados["nome"],
-        txusername=dados["username"],
-        txemail=dados["email"],
-        txsenha=hash_senha(dados["senha"]),
-        cargoid=cargo.idcargo,
-        deptoid=depto.iddepto,
-        aotipousuario=dados["tipo"]
-    )
-
-    db.add(novo)
-
-    db.commit()
-
-    db.refresh(novo)
-
-    return {
-        "message": "Usuário criado"
-    }
-
-
-# =====================================================
 # ALTERAR USUÁRIO
 # =====================================================
 
@@ -351,6 +411,16 @@ def alterar_usuario(
         raise HTTPException(
             status_code=404,
             detail="Usuário não encontrado"
+        )
+
+    if (
+        usuario.aotipousuario == "admin" and
+        usuario.idpessoa != user.idpessoa
+    ):
+
+        raise HTTPException(
+            status_code=403,
+            detail="Não pode alterar outro admin"
         )
 
     if dados.get("senha"):
@@ -394,6 +464,27 @@ def deletar_usuario(
             status_code=404,
             detail="Usuário não encontrado"
         )
+
+    if usuario.idpessoa == user.idpessoa:
+
+        raise HTTPException(
+            status_code=403,
+            detail="Você não pode apagar sua própria conta"
+        )
+
+    if usuario.aotipousuario == "admin":
+
+        raise HTTPException(
+            status_code=403,
+            detail="Não pode remover outro admin"
+        )
+
+    ramais = db.query(RamalPessoa).filter(
+        RamalPessoa.pessoaid == usuario.idpessoa
+    ).all()
+
+    for r in ramais:
+        db.delete(r)
 
     db.delete(usuario)
 
