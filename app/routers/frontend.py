@@ -117,10 +117,6 @@ def criar_contato(
             detail="Sem permissão"
         )
 
-    # ==========================================
-    # DEPARTAMENTO
-    # ==========================================
-
     depto = db.query(Departamento).filter(
         Departamento.txnomedepto == dados["departamento"]
     ).first()
@@ -136,10 +132,6 @@ def criar_contato(
         db.commit()
 
         db.refresh(depto)
-
-    # ==========================================
-    # RAMAL
-    # ==========================================
 
     existe_ramal = db.query(RamalTelefonico).filter(
         RamalTelefonico.nuramal == dados["ramal"]
@@ -162,10 +154,6 @@ def criar_contato(
 
     db.refresh(ramal)
 
-    # ==========================================
-    # CARGO PADRÃO
-    # ==========================================
-
     cargo = db.query(Cargo).first()
 
     if not cargo:
@@ -180,15 +168,13 @@ def criar_contato(
 
         db.refresh(cargo)
 
-    # ==========================================
-    # PESSOA
-    # ==========================================
-
-    email_fake = f"{dados['nome'].lower().replace(' ', '.')}@temp.com"
+    username = dados["nome"].lower().replace(" ", "")
+    email = f"{username}@temp.com"
 
     pessoa = Pessoa(
         txnome=dados["nome"],
-        txemail=email_fake,
+        txusername=username,
+        txemail=email,
         txsenha=hash_senha("123456"),
         cargoid=cargo.idcargo,
         deptoid=depto.iddepto,
@@ -200,10 +186,6 @@ def criar_contato(
     db.commit()
 
     db.refresh(pessoa)
-
-    # ==========================================
-    # VÍNCULOS
-    # ==========================================
 
     rp = RamalPessoa(
         pessoaid=pessoa.idpessoa,
@@ -224,144 +206,9 @@ def criar_contato(
         "message": "Contato criado"
     }
 
-# =====================================================
-# EDITAR CONTATO
-# =====================================================
-
-@router.put("/pessoas/{id}")
-def editar_contato(
-    id: int,
-    dados: dict,
-    db: Session = Depends(get_db),
-    user=Depends(get_current_user)
-):
-
-    if user.aotipousuario != "admin":
-
-        raise HTTPException(
-            status_code=403,
-            detail="Apenas admin"
-        )
-
-    ramal = db.query(RamalTelefonico).filter(
-        RamalTelefonico.idramal == id
-    ).first()
-
-    if not ramal:
-
-        raise HTTPException(
-            status_code=404,
-            detail="Contato não encontrado"
-        )
-
-    # ==========================================
-    # RAMAL
-    # ==========================================
-
-    existe_ramal = db.query(RamalTelefonico).filter(
-        RamalTelefonico.nuramal == dados["ramal"],
-        RamalTelefonico.idramal != id
-    ).first()
-
-    if existe_ramal:
-
-        raise HTTPException(
-            status_code=400,
-            detail="Ramal já existe"
-        )
-
-    ramal.nuramal = dados["ramal"]
-
-    # ==========================================
-    # PESSOA
-    # ==========================================
-
-    pessoa_link = db.query(RamalPessoa).filter(
-        RamalPessoa.ramalid == id
-    ).first()
-
-    if pessoa_link:
-
-        pessoa = db.query(Pessoa).filter(
-            Pessoa.idpessoa == pessoa_link.pessoaid
-        ).first()
-
-        if pessoa:
-
-            pessoa.txnome = dados["nome"]
-
-    # ==========================================
-    # DEPARTAMENTO
-    # ==========================================
-
-    depto_link = db.query(RamalDepto).filter(
-        RamalDepto.ramalid == id
-    ).first()
-
-    if depto_link:
-
-        depto = db.query(Departamento).filter(
-            Departamento.iddepto == depto_link.deptoid
-        ).first()
-
-        if depto:
-
-            depto.txnomedepto = dados["departamento"]
-
-    db.commit()
-
-    return {
-        "message": "Contato atualizado"
-    }
 
 # =====================================================
-# DELETAR CONTATO
-# =====================================================
-
-@router.delete("/pessoas/{id}")
-def deletar_contato(
-    id: int,
-    db: Session = Depends(get_db),
-    user=Depends(get_current_user)
-):
-
-    if user.aotipousuario != "admin":
-
-        raise HTTPException(
-            status_code=403,
-            detail="Apenas admin"
-        )
-
-    ramal = db.query(RamalTelefonico).filter(
-        RamalTelefonico.idramal == id
-    ).first()
-
-    if not ramal:
-
-        raise HTTPException(
-            status_code=404,
-            detail="Contato não encontrado"
-        )
-
-    db.query(RamalPessoa).filter(
-        RamalPessoa.ramalid == id
-    ).delete()
-
-    db.query(RamalDepto).filter(
-        RamalDepto.ramalid == id
-    ).delete()
-
-    db.delete(ramal)
-
-    db.commit()
-
-    return {
-        "message": "Contato removido"
-    }
-
-
-# =====================================================
-# USUÁRIOS
+# LISTAR USUÁRIOS
 # =====================================================
 
 @router.get("/usuarios/")
@@ -383,6 +230,8 @@ def listar_usuarios(
         {
             "id": u.idpessoa,
             "nome": u.txnome,
+            "username": u.txusername,
+            "email": u.txemail,
             "aotipousuario": u.aotipousuario
         }
         for u in usuarios
@@ -407,23 +256,56 @@ def criar_usuario(
             detail="Apenas admin"
         )
 
-    existe = db.query(Pessoa).filter(
-        Pessoa.txemail == f"{dados['nome']}@temp.com"
+    existe_username = db.query(Pessoa).filter(
+        Pessoa.txusername == dados["username"]
     ).first()
 
-    if existe:
+    if existe_username:
 
         raise HTTPException(
             status_code=400,
-            detail="Usuário já existe"
+            detail="Username já existe"
+        )
+
+    existe_email = db.query(Pessoa).filter(
+        Pessoa.txemail == dados["email"]
+    ).first()
+
+    if existe_email:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Email já existe"
         )
 
     cargo = db.query(Cargo).first()
+
     depto = db.query(Departamento).first()
+
+    if not cargo:
+
+        cargo = Cargo(txnome="Funcionário")
+
+        db.add(cargo)
+
+        db.commit()
+
+        db.refresh(cargo)
+
+    if not depto:
+
+        depto = Departamento(txnomedepto="TI")
+
+        db.add(depto)
+
+        db.commit()
+
+        db.refresh(depto)
 
     novo = Pessoa(
         txnome=dados["nome"],
-        txemail=f"{dados['nome']}@temp.com",
+        txusername=dados["username"],
+        txemail=dados["email"],
         txsenha=hash_senha(dados["senha"]),
         cargoid=cargo.idcargo,
         deptoid=depto.iddepto,
@@ -442,7 +324,7 @@ def criar_usuario(
 
 
 # =====================================================
-# ALTERAR SENHA
+# ALTERAR USUÁRIO
 # =====================================================
 
 @router.put("/usuarios/{id}")
