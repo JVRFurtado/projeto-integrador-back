@@ -99,13 +99,16 @@ class RamalPessoa(Base):
         ForeignKey(
             "pessoas.idpessoa",
             ondelete="CASCADE"
-        )
+        ),
         primary_key=True
     )
 
     ramalid = Column(
         Integer,
-        ForeignKey("ramais_telefonicos.idramal"),
+        ForeignKey(
+            "ramais_telefonicos.idramal",
+            ondelete="CASCADE"
+        ),
         primary_key=True
     )
 
@@ -123,7 +126,7 @@ class RamalDepto(Base):
         ForeignKey(
             "departamentos.iddepto",
             ondelete="CASCADE"
-    )
+        ),
         primary_key=True
     )
 
@@ -132,7 +135,7 @@ class RamalDepto(Base):
         ForeignKey(
             "ramais_telefonicos.idramal",
             ondelete="CASCADE"
-        )
+        ),
         primary_key=True
     )
 
