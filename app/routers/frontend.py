@@ -321,51 +321,58 @@ def deletar_contato(
     user=Depends(get_current_user)
 ):
 
-    try:
-
-        if user.aotipousuario not in [
-            "admin",
-            "gestor"
-        ]:
-
-            raise HTTPException(
-                status_code=403,
-                detail="Sem permissão"
-            )
-
-        pessoa = db.query(Pessoa).filter(
-            Pessoa.idpessoa == id
-        ).first()
-
-        if not pessoa:
-
-            raise HTTPException(
-                status_code=404,
-                detail="Contato não encontrado"
-            )
-
-        db.query(RamalPessoa).filter(
-            RamalPessoa.pessoaid == pessoa.idpessoa
-        ).delete(
-            synchronize_session=False
-        )
-
-        db.delete(pessoa)
-
-        db.commit()
-
-        return {
-            "message": "Contato removido"
-        }
-
-    except Exception as e:
-
-        db.rollback()
+    if user.aotipousuario not in [
+        "admin",
+        "gestor"
+    ]:
 
         raise HTTPException(
-            status_code=500,
-            detail=str(e)
+            status_code=403,
+            detail="Sem permissão"
         )
+
+    pessoa = db.query(Pessoa).filter(
+        Pessoa.idpessoa == id
+    ).first()
+
+    if not pessoa:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Contato não encontrado"
+        )
+
+    relacoes = db.query(RamalPessoa).filter(
+        RamalPessoa.pessoaid == pessoa.idpessoa
+    ).all()
+
+    for rel in relacoes:
+
+        db.delete(rel)
+
+        ramal = db.query(RamalTelefonico).filter(
+            RamalTelefonico.idramal == rel.ramalid
+        ).first()
+
+        if ramal:
+
+            deptos = db.query(RamalDepto).filter(
+                RamalDepto.ramalid == ramal.idramal
+            ).all()
+
+            for d in deptos:
+                db.delete(d)
+
+            db.delete(ramal)
+
+    db.delete(pessoa)
+
+    db.commit()
+
+    return {
+        "message": "Contato removido"
+    }
+}
 
 # =====================================================
 # LISTAR USUÁRIOS
@@ -630,13 +637,6 @@ def deletar_usuario(
             detail="Apenas admin"
         )
 
-    if user.idpessoa == id:
-
-        raise HTTPException(
-            status_code=400,
-            detail="Você não pode excluir a si mesmo"
-        )
-
     usuario = db.query(Pessoa).filter(
         Pessoa.idpessoa == id
     ).first()
@@ -648,35 +648,40 @@ def deletar_usuario(
             detail="Usuário não encontrado"
         )
 
-    # =========================================
-    # REMOVE RELAÇÃO RAMAL_PESSOAS
-    # =========================================
+    # NÃO DEIXA ADMIN EXCLUIR A SI MESMO
+    if usuario.idpessoa == user.idpessoa:
 
+        raise HTTPException(
+            status_code=400,
+            detail="Admin não pode excluir a própria conta"
+        )
+
+    # REMOVE RELACIONAMENTOS
     relacoes = db.query(RamalPessoa).filter(
-        RamalPessoa.pessoaid == id
+        RamalPessoa.pessoaid == usuario.idpessoa
     ).all()
 
     for rel in relacoes:
 
-        # remove ramal vinculado
+        # REMOVE VÍNCULO RAMAL/PESSOA
+        db.delete(rel)
+
+        # REMOVE RAMAL
         ramal = db.query(RamalTelefonico).filter(
             RamalTelefonico.idramal == rel.ramalid
         ).first()
 
         if ramal:
 
-            # remove relações depto
-            db.query(RamalDepto).filter(
+            # REMOVE VÍNCULOS DEPARTAMENTO/RAMAL
+            deptos = db.query(RamalDepto).filter(
                 RamalDepto.ramalid == ramal.idramal
-            ).delete()
+            ).all()
+
+            for d in deptos:
+                db.delete(d)
 
             db.delete(ramal)
-
-        db.delete(rel)
-
-    # =========================================
-    # REMOVE USUÁRIO
-    # =========================================
 
     db.delete(usuario)
 
@@ -685,3 +690,4 @@ def deletar_usuario(
     return {
         "message": "Usuário removido"
     }
+}
