@@ -321,60 +321,51 @@ def deletar_contato(
     user=Depends(get_current_user)
 ):
 
-    if user.aotipousuario not in [
-        "admin",
-        "gestor"
-    ]:
+    try:
 
-        raise HTTPException(
-            status_code=403,
-            detail="Sem permissão"
-        )
+        if user.aotipousuario not in [
+            "admin",
+            "gestor"
+        ]:
 
-    pessoa = db.query(Pessoa).filter(
-        Pessoa.idpessoa == id
-    ).first()
+            raise HTTPException(
+                status_code=403,
+                detail="Sem permissão"
+            )
 
-    if not pessoa:
-
-        raise HTTPException(
-            status_code=404,
-            detail="Contato não encontrado"
-        )
-
-    # pega vínculos do usuário
-    links = db.query(RamalPessoa).filter(
-        RamalPessoa.pessoaid == pessoa.idpessoa
-    ).all()
-
-    for link in links:
-
-        ramal_id = link.ramalid
-
-        # remove vínculo pessoa x ramal
-        db.delete(link)
-
-        # remove vínculo departamento x ramal
-        db.query(RamalDepto).filter(
-            RamalDepto.ramalid == ramal_id
-        ).delete()
-
-        # remove ramal
-        ramal = db.query(RamalTelefonico).filter(
-            RamalTelefonico.idramal == ramal_id
+        pessoa = db.query(Pessoa).filter(
+            Pessoa.idpessoa == id
         ).first()
 
-        if ramal:
-            db.delete(ramal)
+        if not pessoa:
 
-    # remove pessoa
-    db.delete(pessoa)
+            raise HTTPException(
+                status_code=404,
+                detail="Contato não encontrado"
+            )
 
-    db.commit()
+        db.query(RamalPessoa).filter(
+            RamalPessoa.pessoaid == pessoa.idpessoa
+        ).delete(
+            synchronize_session=False
+        )
 
-    return {
-        "message": "Contato removido"
-    }
+        db.delete(pessoa)
+
+        db.commit()
+
+        return {
+            "message": "Contato removido"
+        }
+
+    except Exception as e:
+
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
 # =====================================================
 # LISTAR USUÁRIOS
@@ -556,58 +547,52 @@ def deletar_usuario(
     user=Depends(get_current_user)
 ):
 
-    if user.aotipousuario != "admin":
+    try:
 
-        raise HTTPException(
-            status_code=403,
-            detail="Apenas admin"
-        )
+        if user.aotipousuario != "admin":
 
-    if user.idpessoa == id:
+            raise HTTPException(
+                status_code=403,
+                detail="Apenas admin"
+            )
 
-        raise HTTPException(
-            status_code=400,
-            detail="Você não pode excluir seu próprio usuário"
-        )
+        if user.idpessoa == id:
 
-    usuario = db.query(Pessoa).filter(
-        Pessoa.idpessoa == id
-    ).first()
+            raise HTTPException(
+                status_code=400,
+                detail="Você não pode excluir seu próprio usuário"
+            )
 
-    if not usuario:
-
-        raise HTTPException(
-            status_code=404,
-            detail="Usuário não encontrado"
-        )
-
-    # remove vínculos com ramais
-    links = db.query(RamalPessoa).filter(
-        RamalPessoa.pessoaid == usuario.idpessoa
-    ).all()
-
-    for link in links:
-
-        ramal = db.query(RamalTelefonico).filter(
-            RamalTelefonico.idramal == link.ramalid
+        usuario = db.query(Pessoa).filter(
+            Pessoa.idpessoa == id
         ).first()
 
-        # remove vínculo departamento x ramal
-        db.query(RamalDepto).filter(
-            RamalDepto.ramalid == link.ramalid
-        ).delete()
+        if not usuario:
 
-        # remove vínculo pessoa x ramal
-        db.delete(link)
+            raise HTTPException(
+                status_code=404,
+                detail="Usuário não encontrado"
+            )
 
-        # remove ramal
-        if ramal:
-            db.delete(ramal)
+        db.query(RamalPessoa).filter(
+            RamalPessoa.pessoaid == usuario.idpessoa
+        ).delete(
+            synchronize_session=False
+        )
 
-    db.delete(usuario)
+        db.delete(usuario)
 
-    db.commit()
+        db.commit()
 
-    return {
-        "message": "Usuário removido"
-    }
+        return {
+            "message": "Usuário removido"
+        }
+
+    except Exception as e:
+
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
