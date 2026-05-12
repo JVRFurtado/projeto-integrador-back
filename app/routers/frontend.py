@@ -513,17 +513,94 @@ def alterar_usuario(
             detail="Usuário não encontrado"
         )
 
-    if (
-        usuario.aotipousuario == "admin"
-        and user.idpessoa != usuario.idpessoa
-    ):
+    # =========================================
+    # VALIDA USERNAME ÚNICO
+    # =========================================
 
-        raise HTTPException(
-            status_code=403,
-            detail="Não é permitido alterar senha de outro admin"
-        )
+    if "username" in dados:
+
+        existe = db.query(Pessoa).filter(
+            Pessoa.txusername == dados["username"],
+            Pessoa.idpessoa != id
+        ).first()
+
+        if existe:
+
+            raise HTTPException(
+                status_code=400,
+                detail="Username já existe"
+            )
+
+        usuario.txusername = dados["username"]
+
+    # =========================================
+    # VALIDA EMAIL ÚNICO
+    # =========================================
+
+    if "email" in dados:
+
+        existe = db.query(Pessoa).filter(
+            Pessoa.txemail == dados["email"],
+            Pessoa.idpessoa != id
+        ).first()
+
+        if existe:
+
+            raise HTTPException(
+                status_code=400,
+                detail="Email já existe"
+            )
+
+        usuario.txemail = dados["email"]
+
+    # =========================================
+    # NOME
+    # =========================================
+
+    if "nome" in dados:
+
+        usuario.txnome = dados["nome"]
+
+    # =========================================
+    # TIPO
+    # =========================================
+
+    if "tipo" in dados:
+
+        if (
+            usuario.aotipousuario == "admin"
+            and user.idpessoa != usuario.idpessoa
+        ):
+
+            raise HTTPException(
+                status_code=403,
+                detail="Não pode alterar outro admin"
+            )
+
+        usuario.aotipousuario = dados["tipo"]
+
+    # =========================================
+    # SENHA
+    # =========================================
 
     if dados.get("senha"):
+
+        if len(dados["senha"]) < 6:
+
+            raise HTTPException(
+                status_code=400,
+                detail="Senha deve ter pelo menos 6 caracteres"
+            )
+
+        if (
+            usuario.aotipousuario == "admin"
+            and user.idpessoa != usuario.idpessoa
+        ):
+
+            raise HTTPException(
+                status_code=403,
+                detail="Não pode alterar senha de outro admin"
+            )
 
         usuario.txsenha = hash_senha(
             dados["senha"]
@@ -534,7 +611,6 @@ def alterar_usuario(
     return {
         "message": "Usuário atualizado"
     }
-
 
 # =====================================================
 # REMOVER USUÁRIO
@@ -547,52 +623,65 @@ def deletar_usuario(
     user=Depends(get_current_user)
 ):
 
-    try:
-
-        if user.aotipousuario != "admin":
-
-            raise HTTPException(
-                status_code=403,
-                detail="Apenas admin"
-            )
-
-        if user.idpessoa == id:
-
-            raise HTTPException(
-                status_code=400,
-                detail="Você não pode excluir seu próprio usuário"
-            )
-
-        usuario = db.query(Pessoa).filter(
-            Pessoa.idpessoa == id
-        ).first()
-
-        if not usuario:
-
-            raise HTTPException(
-                status_code=404,
-                detail="Usuário não encontrado"
-            )
-
-        db.query(RamalPessoa).filter(
-            RamalPessoa.pessoaid == usuario.idpessoa
-        ).delete(
-            synchronize_session=False
-        )
-
-        db.delete(usuario)
-
-        db.commit()
-
-        return {
-            "message": "Usuário removido"
-        }
-
-    except Exception as e:
-
-        db.rollback()
+    if user.aotipousuario != "admin":
 
         raise HTTPException(
-            status_code=500,
-            detail=str(e)
+            status_code=403,
+            detail="Apenas admin"
         )
+
+    if user.idpessoa == id:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Você não pode excluir a si mesmo"
+        )
+
+    usuario = db.query(Pessoa).filter(
+        Pessoa.idpessoa == id
+    ).first()
+
+    if not usuario:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Usuário não encontrado"
+        )
+
+    # =========================================
+    # REMOVE RELAÇÃO RAMAL_PESSOAS
+    # =========================================
+
+    relacoes = db.query(RamalPessoa).filter(
+        RamalPessoa.pessoaid == id
+    ).all()
+
+    for rel in relacoes:
+
+        # remove ramal vinculado
+        ramal = db.query(RamalTelefonico).filter(
+            RamalTelefonico.idramal == rel.ramalid
+        ).first()
+
+        if ramal:
+
+            # remove relações depto
+            db.query(RamalDepto).filter(
+                RamalDepto.ramalid == ramal.idramal
+            ).delete()
+
+            db.delete(ramal)
+
+        db.delete(rel)
+
+    # =========================================
+    # REMOVE USUÁRIO
+    # =========================================
+
+    db.delete(usuario)
+
+    db.commit()
+
+    return {
+        "message": "Usuário removido"
+    }
