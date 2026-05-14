@@ -372,7 +372,7 @@ def deletar_contato(
     return {
         "message": "Contato removido"
     }
-}
+
 
 # =====================================================
 # LISTAR USUÁRIOS
@@ -384,11 +384,14 @@ def listar_usuarios(
     user=Depends(get_current_user)
 ):
 
-    if user.aotipousuario != "admin":
+    if user.aotipousuario not in [
+        "admin",
+        "gestor"
+    ]:
 
         raise HTTPException(
             status_code=403,
-            detail="Apenas admin"
+            detail="Sem permissão"
         )
 
     usuarios = db.query(Pessoa).all()
@@ -416,11 +419,26 @@ def criar_usuario(
     user=Depends(get_current_user)
 ):
 
-    if user.aotipousuario != "admin":
+    if user.aotipousuario not in [
+        "admin",
+        "gestor"
+    ]:
 
         raise HTTPException(
             status_code=403,
-            detail="Apenas admin"
+            detail="Sem permissão"
+        )
+
+    tipo = dados.get("tipo", "padrao")
+
+    # gestor não pode criar admin
+    if (
+        user.aotipousuario == "gestor"
+        and tipo == "admin"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Gestor não pode criar admin"
         )
 
     existe_username = db.query(Pessoa).filter(
@@ -476,7 +494,7 @@ def criar_usuario(
         txsenha=hash_senha(dados["senha"]),
         cargoid=cargo.idcargo,
         deptoid=depto.iddepto,
-        aotipousuario=dados["tipo"]
+        aotipousuario=tipo
     )
 
     db.add(novo)
@@ -502,11 +520,14 @@ def alterar_usuario(
     user=Depends(get_current_user)
 ):
 
-    if user.aotipousuario != "admin":
+    if user.aotipousuario not in [
+        "admin",
+        "gestor"
+    ]:
 
         raise HTTPException(
             status_code=403,
-            detail="Apenas admin"
+            detail="Sem permissão"
         )
 
     usuario = db.query(Pessoa).filter(
@@ -518,6 +539,17 @@ def alterar_usuario(
         raise HTTPException(
             status_code=404,
             detail="Usuário não encontrado"
+        )
+
+    # gestor não pode alterar admin/gestor
+    if (
+        user.aotipousuario == "gestor"
+        and usuario.aotipousuario in ["admin", "gestor"]
+        and usuario.idpessoa != user.idpessoa
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Gestor não pode alterar admin ou gestor"
         )
 
     # =========================================
@@ -574,14 +606,14 @@ def alterar_usuario(
 
     if "tipo" in dados:
 
+        # gestor não pode promover admin
         if (
-            usuario.aotipousuario == "admin"
-            and user.idpessoa != usuario.idpessoa
+            user.aotipousuario == "gestor"
+            and dados["tipo"] == "admin"
         ):
-
             raise HTTPException(
                 status_code=403,
-                detail="Não pode alterar outro admin"
+                detail="Gestor não pode promover admin"
             )
 
         usuario.aotipousuario = dados["tipo"]
@@ -599,14 +631,15 @@ def alterar_usuario(
                 detail="Senha deve ter pelo menos 6 caracteres"
             )
 
+        # gestor não pode alterar senha de admin/gestor
         if (
-            usuario.aotipousuario == "admin"
-            and user.idpessoa != usuario.idpessoa
+            user.aotipousuario == "gestor"
+            and usuario.aotipousuario in ["admin", "gestor"]
+            and usuario.idpessoa != user.idpessoa
         ):
-
             raise HTTPException(
                 status_code=403,
-                detail="Não pode alterar senha de outro admin"
+                detail="Gestor não pode alterar senha de admin ou gestor"
             )
 
         usuario.txsenha = hash_senha(
@@ -619,6 +652,7 @@ def alterar_usuario(
         "message": "Usuário atualizado"
     }
 
+
 # =====================================================
 # REMOVER USUÁRIO
 # =====================================================
@@ -630,11 +664,14 @@ def deletar_usuario(
     user=Depends(get_current_user)
 ):
 
-    if user.aotipousuario != "admin":
+    if user.aotipousuario not in [
+        "admin",
+        "gestor"
+    ]:
 
         raise HTTPException(
             status_code=403,
-            detail="Apenas admin"
+            detail="Sem permissão"
         )
 
     usuario = db.query(Pessoa).filter(
@@ -648,12 +685,22 @@ def deletar_usuario(
             detail="Usuário não encontrado"
         )
 
-    # NÃO DEIXA ADMIN EXCLUIR A SI MESMO
+    # gestor não pode excluir admin/gestor
+    if (
+        user.aotipousuario == "gestor"
+        and usuario.aotipousuario in ["admin", "gestor"]
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Gestor não pode excluir admin ou gestor"
+        )
+
+    # ninguém pode excluir a própria conta
     if usuario.idpessoa == user.idpessoa:
 
         raise HTTPException(
             status_code=400,
-            detail="Admin não pode excluir a própria conta"
+            detail="Não pode excluir a própria conta"
         )
 
     # REMOVE RELACIONAMENTOS
@@ -663,17 +710,14 @@ def deletar_usuario(
 
     for rel in relacoes:
 
-        # REMOVE VÍNCULO RAMAL/PESSOA
         db.delete(rel)
 
-        # REMOVE RAMAL
         ramal = db.query(RamalTelefonico).filter(
             RamalTelefonico.idramal == rel.ramalid
         ).first()
 
         if ramal:
 
-            # REMOVE VÍNCULOS DEPARTAMENTO/RAMAL
             deptos = db.query(RamalDepto).filter(
                 RamalDepto.ramalid == ramal.idramal
             ).all()
