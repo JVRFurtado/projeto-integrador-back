@@ -734,4 +734,3 @@ def deletar_usuario(
     return {
         "message": "Usuário removido"
     }
-}
